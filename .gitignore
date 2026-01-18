@@ -1,2 +1,4 @@
 .env
 agent-env
+__pycache__
+src/agents/__pycache__

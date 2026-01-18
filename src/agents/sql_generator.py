@@ -1,5 +1,6 @@
 from typing import List
 from intent_agent import IntentState, Join, Filter, Aggregation
+# from sqlgenerator import intent_state
 
 
 class SQLGeneratorAgent:
@@ -95,22 +96,33 @@ class SQLGeneratorAgent:
         return "WHERE " + " AND ".join(parts)
 
 
+# intent_state = IntentState(
+#     intent="SELECT",
+#     tables=["sales", "users"],
+#     columns=["users.name", "SUM(sales.amount)"],
+#     joins=[
+#         Join(
+#             table1="sales", table2="users", column1="sales.user_id", column2="users.id"
+#         )
+#     ],
+#     filters=[
+#         Filter(column="sales.date", operator=">=", value="last_week_start_date"),
+#         Filter(column="sales.date", operator="<=", value="last_week_end_date"),
+#     ],
+#     group_by=["users.name"],
+#     order_by=[],
+#     aggregations=[Aggregation(column="sales.amount", function="SUM")],
+#     limit=None,
+# )
 intent_state = IntentState(
     intent="SELECT",
-    tables=["sales", "users"],
-    columns=["users.name", "SUM(sales.amount)"],
-    joins=[
-        Join(
-            table1="sales", table2="users", column1="sales.user_id", column2="users.id"
-        )
-    ],
-    filters=[
-        Filter(column="sales.date", operator=">=", value="last_week_start_date"),
-        Filter(column="sales.date", operator="<=", value="last_week_end_date"),
-    ],
-    group_by=["users.name"],
+    tables=["users"],
+    columns=["*"],
+    joins=[],
+    filters=[],
+    group_by=[],
     order_by=[],
-    aggregations=[Aggregation(column="sales.amount", function="SUM")],
+    aggregations=[],
     limit=None,
 )
 generator = SQLGeneratorAgent()

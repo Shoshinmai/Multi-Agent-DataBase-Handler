@@ -12,7 +12,7 @@ gemini_key = "AIzaSyCbKbhdIgYLC_ECAdoXK6SB7htSh6P83VU"
 print(os.getenv("gemini_api_key"))
 
 llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash-lite", google_api_key=gemini_key, temperature=0
+    model="gemini-2.5-flash", google_api_key=gemini_key, temperature=0
 )
 
 
@@ -26,7 +26,9 @@ class Join(BaseModel):
 class Filter(BaseModel):
     column: str
     operator: str
-    value: str
+    value: Optional[str] = None
+    aggregation: Optional[str] = None
+    subquery: Optional["IntentState"] = None
 
 
 class Aggregation(BaseModel):
@@ -50,7 +52,7 @@ INTENT_EXTRACTION_PROMPT = """
 You are an Intent Extraction Agent for converting natural language into a structured JSON representation
 for SQL query planning.
 
-Return ONLY a **valid JSON object**, nothing else. No explanations.
+Return ONLY a valid JSON object. No explanations, no markdown, no extra text.
 
 The JSON MUST follow this schema exactly:
 
@@ -58,6 +60,7 @@ The JSON MUST follow this schema exactly:
   "intent": "SELECT | INSERT | UPDATE | DELETE",
   "tables": ["table1", "table2"],
   "columns": ["col1", "col2"],
+
   "joins": [
     {
       "table1": "string",
@@ -66,47 +69,124 @@ The JSON MUST follow this schema exactly:
       "column2": "string"
     }
   ],
+
   "filters": [
     {
       "column": "string",
       "operator": "string",
-      "value": "string"
+
+      "value": "string | None",
+
+      "subquery": {
+        "intent": "SELECT",
+        "tables": ["table"],
+        "columns": [],
+        "joins": [],
+        "filters": [],
+        "aggregations": [
+          {
+            "column": "string",
+            "function": "SUM | COUNT | AVG | MIN | MAX"
+          }
+        ],
+        "group_by": [],
+        "order_by": [],
+        "limit": None
+      }
     }
   ],
-  "group_by": ["col1", "col2"],
-  "order_by": ["col1 DESC", "col2 ASC"],
+
   "aggregations": [
     {
       "column": "string",
       "function": "SUM | COUNT | AVG | MIN | MAX"
     }
   ],
+
+  "group_by": ["col1", "col2"],
+  "order_by": ["col1 DESC", "col2 ASC"],
   "limit": 10
 }
 
-If information is missing, return empty arrays or null values.
-ALWAYS include the key even if the list is empty.
+IMPORTANT RULES:
 
-Return ONLY JSON. Use exactly these keys:
+1. ALWAYS return ALL top-level keys:
+   intent, tables, columns, joins, filters, aggregations, group_by, order_by, limit
 
+2. If a key has no values, return an empty list [] or None (for limit).
+
+3. NEVER include extra keys such as:
+   query, reasoning, confidence, explanation, metadata, action
+
+4. ALWAYS use "intent", NEVER use "action".
+
+5. For simple filters, use:
+   {
+     "column": "...",
+     "operator": "...",
+     "value": "...",
+     "subquery": None
+   }
+
+6. If a filter compares against a derived value (average, total, max, min, count),
+   represent it as a SUBQUERY:
+   - Set "value" to None
+   - Populate the "subquery" object fully
+   - DO NOT write raw SQL inside "value"
+
+7. Subqueries MUST follow the SAME schema as the parent query
+   (intent, tables, joins, filters, aggregations, group_by, order_by, limit).
+
+8. Do NOT generate raw SQL strings anywhere.
+
+FILTER AGGREGATION RULES:
+
+- If a filter compares an aggregated value (average, sum, count, min, max),
+  you MUST set the "aggregation" field in the filter.
+
+Examples:
+
+1) "users whose average purchase is greater than X"
+→
 {
-  "intent": "...",
-  "tables": [...],
-  "columns": [...],
-  "joins": [...],
-  "filters": [...],
-  "aggregations": [...],
-  "group_by": [...],
-  "order_by": [...],
-  "limit": ...
+  "column": "purchases.amount",
+  "aggregation": "AVG",
+  "operator": ">",
+  "value": "X",
+  "subquery": None
 }
 
-Do NOT include: query, reasoning, confidence, action, metadata, or any extra fields.
-If the user asks "what is my query?", DO NOT add a 'query' field.
-Always use "intent", NOT "action".
+2) "users whose total sales are greater than the average total sales"
+→
+{
+  "column": "purchases.amount",
+  "aggregation": "SUM",
+  "operator": ">",
+  "value": None,
+  "subquery": { ... }
+}
+
+- If the filter is NOT aggregated, set "aggregation" to None.
+- NEVER infer aggregation implicitly.
+
+WHERE vs HAVING RULES:
+
+1. If the filter compares a RAW column value, do NOT use aggregation.
+   → aggregation = null
+   → This filter belongs to WHERE.
+
+2. If the filter compares an AGGREGATED value (AVG, SUM, COUNT, MIN, MAX),
+   you MUST set:
+   - "aggregation": "AVG | SUM | COUNT | MIN | MAX"
+   - AND include appropriate "group_by".
+
+3. NEVER place a filter with aggregation=null into HAVING.
+
+4. If aggregation is provided, GROUP BY is REQUIRED.
+
+
+Return ONLY JSON. No markdown. No explanations.
 """
-
-
 
 
 class IntentAgent:
@@ -143,9 +223,11 @@ class IntentAgent:
 
             # Force JSON extraction
             parsed_json = self._extract_json(raw_output)
-
+            # ps = IntentState(**parsed_json).split()
+            # parsed_json = "]".join(IntentState(**parsed_json))
             # Validate using Pydantic model
-            print(IntentState(**parsed_json))
+            # print(IntentState(**parsed_json))
+            # print(IntentState(**parsed_json))
             return IntentState(**parsed_json)
 
         except ValidationError as e:
@@ -173,6 +255,8 @@ class IntentAgent:
 
 
 agent = IntentAgent(llm)
-result = agent.run("show me total sales by each user last week")
+result = agent.run("show all the users")
+# result = agent.run("Show all users who made more than the average purchase amount.")
 
-# print(result)
+# print(result.model_dump_json(indent=2))
+print(result)
