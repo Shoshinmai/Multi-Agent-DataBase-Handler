@@ -3,13 +3,15 @@ import json
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel
 from typing import Dict, Any
+from dotenv import load_dotenv
 
 from pydantic import ValidationError
 from typing import List, Optional
 
-# gemini_key = os.getenv("gemini_api_key")
-gemini_key = "AIzaSyCbKbhdIgYLC_ECAdoXK6SB7htSh6P83VU"
-print(os.getenv("gemini_api_key"))
+load_dotenv()
+gemini_key = os.getenv("gemini_api_key")
+# gemini_key = "AIzaSyCbKbhdIgYLC_ECAdoXK6SB7htSh6P83VU"
+# print(os.getenv("gemini_api_key"))
 
 llm = ChatGoogleGenerativeAI(
     model="gemini-2.5-flash", google_api_key=gemini_key, temperature=0
@@ -254,9 +256,15 @@ class IntentAgent:
             raise ValueError("Failed to parse JSON from LLM output.")
 
 
-agent = IntentAgent(llm)
-result = agent.run("show all the users")
-# result = agent.run("Show all users who made more than the average purchase amount.")
+# agent = IntentAgent(llm)
+# result = agent.run("show all the users")
+# # result = agent.run("Show all users who made more than the average purchase amount.")
 
-# print(result.model_dump_json(indent=2))
-print(result)
+# # print(result.model_dump_json(indent=2))
+# print(result)
+
+# graph/nodes/intent_node.py
+
+# def intent_node(state: GraphState, intent_agent):
+#     intent = intent_agent.run(state.user_query)
+#     return state.model_copy(update={"intent": intent})

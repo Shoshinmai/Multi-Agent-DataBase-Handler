@@ -1,5 +1,5 @@
 from typing import List
-from intent_agent import IntentState, Join, Filter, Aggregation
+from src.agents.intent_agent import IntentState, Join, Filter, Aggregation
 # from sqlgenerator import intent_state
 
 
@@ -114,17 +114,18 @@ class SQLGeneratorAgent:
 #     aggregations=[Aggregation(column="sales.amount", function="SUM")],
 #     limit=None,
 # )
-intent_state = IntentState(
-    intent="SELECT",
-    tables=["users"],
-    columns=["*"],
-    joins=[],
-    filters=[],
-    group_by=[],
-    order_by=[],
-    aggregations=[],
-    limit=None,
-)
-generator = SQLGeneratorAgent()
-sql = generator.generate(intent_state)
-print(sql)
+
+# intent_state = IntentState(
+#     intent="SELECT",
+#     tables=["users"],
+#     columns=["*"],
+#     joins=[],
+#     filters=[],
+#     group_by=[],
+#     order_by=[],
+#     aggregations=[],
+#     limit=None,
+# )
+# generator = SQLGeneratorAgent()
+# sql = generator.generate(intent_state)
+# print(sql)

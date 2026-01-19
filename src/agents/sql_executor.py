@@ -35,25 +35,25 @@ class SQLExecutorAgent:
             if word in normalized:
                 raise ValueError(f"Blocked keyword: {word}")
 
-from src.database import engine
+# from src.database import engine
 
-executor = SQLExecutorAgent(engine)
+# executor = SQLExecutorAgent(engine)
 
-sql = """
-SELECT users.name, purchases.amount
-FROM users
-JOIN purchases ON users.id = purchases.user_id
-ORDER BY purchases.amount DESC
-LIMIT 5;
-"""
 # sql = """
-# SELECT *
-# FROM users;
+# SELECT users.name, purchases.amount
+# FROM users
+# JOIN purchases ON users.id = purchases.user_id 
+# ORDER BY purchases.amount DESC
+# LIMIT 5;
 # """
+# # sql = """
+# # SELECT *
+# # FROM users;
+# # """
 
-result = executor.execute(sql)
+# result = executor.execute(sql)
 
-print("Columns:", result["columns"])
-print("Rows:")
-for row in result["rows"]:
-    print(row)
+# print("Columns:", result["columns"])
+# print("Rows:")
+# for row in result["rows"]:
+#     print(row)
