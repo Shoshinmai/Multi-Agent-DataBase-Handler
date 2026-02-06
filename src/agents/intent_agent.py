@@ -229,7 +229,7 @@ class IntentAgent:
             # parsed_json = "]".join(IntentState(**parsed_json))
             # Validate using Pydantic model
             # print(IntentState(**parsed_json))
-            # print(IntentState(**parsed_json))
+            print(IntentState(**parsed_json))
             return IntentState(**parsed_json)
 
         except ValidationError as e:
