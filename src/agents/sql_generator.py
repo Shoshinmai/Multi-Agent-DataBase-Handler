@@ -1,4 +1,5 @@
 from typing import List
+# from intent_agent import IntentState, Join, Filter, Aggregation
 from src.agents.intent_agent import IntentState, Join, Filter, Aggregation
 # from sqlgenerator import intent_state
 
@@ -86,16 +87,72 @@ class SQLGeneratorAgent:
         """
         parts = []
         for f in filters:
-            value = (
-                f"'{f.value}'"
-                if isinstance(f.value, str) and not f.value.upper().startswith("DATE(")
-                else f.value
-            )
-            parts.append(f"{f.column} {f.operator} {value}")
+
+            # CASE 1 — Subquery exists (DERIVED FILTER)
+            if f.subquery:
+                subquery_sql = self.generate(f.subquery).rstrip(";")
+                parts.append(f"{f.column} {f.operator} ({subquery_sql})")
+
+            # CASE 2 — Aggregated filter (HAVING handled separately if needed)
+            elif f.aggregation:
+                parts.append(f"{f.aggregation}({f.column}) {f.operator} {f.value}")
+
+            # CASE 3 — Normal filter
+            else:
+                parts.append(f"{f.column} {f.operator} {self._format_value(f.value)}")
 
         return "WHERE " + " AND ".join(parts)
 
+    def _format_value(self, value):
+        if value is None:
+            raise ValueError("Filter value is None and no subquery provided.")
 
+        if isinstance(value, str):
+            return f"'{value}'"
+
+        return value
+
+    # parts = []
+    # for f in filters:
+    #     value = (
+    #         f"'{f.value}'"
+    #         if isinstance(f.value, str) and not f.value.upper().startswith("DATE(")
+    #         else f.value
+    #     )
+    #     parts.append(f"{f.column} {f.operator} {value}")
+
+    # return "WHERE " + " AND ".join(parts)
+
+
+# intent_state = IntentState(
+#     intent="SELECT",
+#     tables=["users", "purchases"],
+#     columns=["users.id", "users.name"],
+#     joins=[Join(table1="users", table2="purchases", column1="id", column2="user_id")],
+#     filters=[
+#         Filter(
+#             column="purchases.amount",
+#             operator=">",
+#             value=None,
+#             aggregation=None,
+#             subquery=IntentState(
+#                 intent="SELECT",
+#                 tables=["purchases"],
+#                 columns=[],
+#                 joins=[],
+#                 filters=[],
+#                 group_by=[],
+#                 order_by=[],
+#                 aggregations=[Aggregation(column="amount", function="AVG")],
+#                 limit=None,
+#             ),
+#         )
+#     ],
+#     group_by=[],
+#     order_by=[],
+#     aggregations=[],
+#     limit=None,
+# )
 # intent_state = IntentState(
 #     intent="SELECT",
 #     tables=["sales", "users"],

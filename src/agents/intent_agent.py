@@ -28,7 +28,8 @@ class Join(BaseModel):
 class Filter(BaseModel):
     column: str
     operator: str
-    value: Optional[str] = None
+    # value: Optional[str] | Optional["IntentState"]  = None
+    value: Optional[Any] = None
     aggregation: Optional[str] = None
     subquery: Optional["IntentState"] = None
 
@@ -77,7 +78,7 @@ The JSON MUST follow this schema exactly:
       "column": "string",
       "operator": "string",
 
-      "value": "string | None",
+      "value": "Any | None",
 
       "subquery": {
         "intent": "SELECT",
@@ -228,8 +229,8 @@ class IntentAgent:
             # ps = IntentState(**parsed_json).split()
             # parsed_json = "]".join(IntentState(**parsed_json))
             # Validate using Pydantic model
+            print(parsed_json)
             # print(IntentState(**parsed_json))
-            print(IntentState(**parsed_json))
             return IntentState(**parsed_json)
 
         except ValidationError as e:
@@ -256,12 +257,12 @@ class IntentAgent:
             raise ValueError("Failed to parse JSON from LLM output.")
 
 
-# agent = IntentAgent(llm)
-# result = agent.run("show all the users")
-# # result = agent.run("Show all users who made more than the average purchase amount.")
+agent = IntentAgent(llm)
+result = agent.run("users whose purchase is greater than the average of last month.")
+# result = agent.run("Show all users who made more than the average purchase amount.")
 
-# # print(result.model_dump_json(indent=2))
-# print(result)
+# print(result.model_dump_json(indent=2))
+print(result)
 
 # graph/nodes/intent_node.py
 
