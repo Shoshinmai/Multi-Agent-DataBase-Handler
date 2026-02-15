@@ -6,11 +6,15 @@ from src.agents.intent_agent import IntentAgent, llm
 from src.agents.sql_generator import SQLGeneratorAgent
 from src.agents.sql_executor import SQLExecutorAgent
 from src.database import engine
+from src.schema_extractor import SchemaExtractor, format_schema_for_prompt
 
 # initialize agents
-intent_agent = IntentAgent(llm)
 sql_generator = SQLGeneratorAgent()
 sql_executor = SQLExecutorAgent(engine)
+schema_extractor = SchemaExtractor(engine)
+schema_dict = schema_extractor.extract_schema()
+schema_context = format_schema_for_prompt(schema_dict)
+intent_agent = IntentAgent(llm, schema_context)
 
 # build langgraph
 from api import routes

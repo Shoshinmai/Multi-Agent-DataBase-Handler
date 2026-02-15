@@ -198,13 +198,14 @@ class IntentAgent:
     Converts natural language input→structured IntentState.
     """
 
-    def __init__(self, model):
+    def __init__(self, model, schema_context: str):
         """
         model = Gemini Model
         Example:
             model = ChatGoogleGenerativeAI(model = "gemini-2.5-flash-lite")
         """
         self.model = model
+        self.schema_context = schema_context
 
     def run(self, query: str) -> IntentState:
         """
@@ -215,7 +216,7 @@ class IntentAgent:
                 [
                     (
                         "system",
-                        f"{INTENT_EXTRACTION_PROMPT}",
+                        f"{INTENT_EXTRACTION_PROMPT}\n\n{self.schema_context}",
                     ),
                     ("human", f"{query}"),
                 ]
@@ -257,12 +258,12 @@ class IntentAgent:
             raise ValueError("Failed to parse JSON from LLM output.")
 
 
-agent = IntentAgent(llm)
-result = agent.run("users whose purchase is greater than the average of last month.")
+# agent = IntentAgent(llm)
+# result = agent.run("users whose purchase is greater than the average of last month.")
 # result = agent.run("Show all users who made more than the average purchase amount.")
 
 # print(result.model_dump_json(indent=2))
-print(result)
+# print(result)
 
 # graph/nodes/intent_node.py
 

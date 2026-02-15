@@ -1,6 +1,8 @@
 from typing import List
+
 # from intent_agent import IntentState, Join, Filter, Aggregation
 from src.agents.intent_agent import IntentState, Join, Filter, Aggregation
+
 # from sqlgenerator import intent_state
 
 
@@ -97,9 +99,14 @@ class SQLGeneratorAgent:
             elif f.aggregation:
                 parts.append(f"{f.aggregation}({f.column}) {f.operator} {f.value}")
 
+            elif isinstance(f.value, tuple):
+                start, end = f.value
+                parts.append(f"{f.column} BETWEEN '{start}' AND '{end}'")
+                
             # CASE 3 — Normal filter
             else:
                 parts.append(f"{f.column} {f.operator} {self._format_value(f.value)}")
+
 
         return "WHERE " + " AND ".join(parts)
 

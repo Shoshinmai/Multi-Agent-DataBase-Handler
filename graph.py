@@ -3,6 +3,8 @@ from typing import Optional
 from pydantic import BaseModel
 from src.agents.intent_agent import IntentState, llm
 from langgraph.graph import StateGraph, END
+from datetime import datetime, timedelta
+from calendar import monthrange
 from src.database import engine
 from src.agents.intent_agent import IntentAgent
 from src.agents.sql_generator import SQLGeneratorAgent
@@ -35,6 +37,58 @@ def sql_executor_node(state: GraphState, sql_executor):
     return state.model_copy(update={"result": result})
 
 
+def date_resolver_node(state: GraphState):
+    """
+    Resolves natural language date phrases into concrete date ranges.
+    """
+
+    intent = state.intent
+    today = datetime.today()
+
+    for f in intent.filters:
+
+        if not f.value:
+            continue
+
+        value = str(f.value).lower()
+
+        # LAST MONTH
+        if value == "last month":
+            first_day_current_month = today.replace(day=1)
+            last_day_last_month = first_day_current_month - timedelta(days=1)
+            first_day_last_month = last_day_last_month.replace(day=1)
+
+            f.operator = "BETWEEN"
+            f.value = (
+                first_day_last_month.strftime("%Y-%m-%d"),
+                last_day_last_month.strftime("%Y-%m-%d")
+            )
+
+        # LAST WEEK
+        elif value == "last week":
+            start_of_this_week = today - timedelta(days=today.weekday())
+            end_of_last_week = start_of_this_week - timedelta(days=1)
+            start_of_last_week = end_of_last_week - timedelta(days=6)
+
+            f.operator = "BETWEEN"
+            f.value = (
+                start_of_last_week.strftime("%Y-%m-%d"),
+                end_of_last_week.strftime("%Y-%m-%d")
+            )
+
+        # TODAY
+        elif value == "today":
+            f.operator = "="
+            f.value = today.strftime("%Y-%m-%d")
+
+        # YESTERDAY
+        elif value == "yesterday":
+            yesterday = today - timedelta(days=1)
+            f.operator = "="
+            f.value = yesterday.strftime("%Y-%m-%d")
+    print(state)
+    return state
+
 
 
 
@@ -45,21 +99,23 @@ def build_graph(intent_agent, sql_generator, sql_executor):
     graph.add_node("intent", lambda s: intent_node(s, intent_agent))
     graph.add_node("sql_generator", lambda s: sql_generator_node(s, sql_generator))
     graph.add_node("sql_executor", lambda s: sql_executor_node(s, sql_executor))
+    graph.add_node("date_resolver", date_resolver_node)
 
     # Define flow
     graph.set_entry_point("intent")
-    graph.add_edge("intent", "sql_generator")
+    graph.add_edge("intent", "date_resolver")
+    graph.add_edge("date_resolver", "sql_generator")
     graph.add_edge("sql_generator", "sql_executor")
     graph.add_edge("sql_executor", END)
 
     return graph.compile()
 
 
-from pprint import pprint
+# from pprint import pprint
 
-intent_agent = IntentAgent(llm)
-sql_generator = SQLGeneratorAgent()
-sql_executor = SQLExecutorAgent(engine)
+# intent_agent = IntentAgent(llm)
+# sql_generator = SQLGeneratorAgent()
+# sql_executor = SQLExecutorAgent(engine)
 
 # graph = build_graph(intent_agent, sql_generator, sql_executor)
 
