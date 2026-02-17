@@ -4,11 +4,6 @@ from pydantic import BaseModel
 from src.agents.intent_agent import IntentState, llm
 from langgraph.graph import StateGraph, END
 from datetime import datetime, timedelta
-from calendar import monthrange
-from src.database import engine
-from src.agents.intent_agent import IntentAgent
-from src.agents.sql_generator import SQLGeneratorAgent
-from src.agents.sql_executor import SQLExecutorAgent
 
 
 class GraphState(BaseModel):
@@ -23,73 +18,101 @@ def intent_node(state: GraphState, intent_agent):
     intent = intent_agent.run(state.user_query)
     return state.model_copy(update={"intent": intent})
 
-# graph/nodes/sql_generator_node.py
 
 def sql_generator_node(state: GraphState, sql_generator):
     sql = sql_generator.generate(state.intent)
     return state.model_copy(update={"sql": sql})
 
 
-# graph/nodes/sql_executor_node.py
-
 def sql_executor_node(state: GraphState, sql_executor):
     result = sql_executor.execute(state.sql)
     return state.model_copy(update={"result": result})
 
 
-def date_resolver_node(state: GraphState):
+def time_scope_resolver_node(state: GraphState):
     """
-    Resolves natural language date phrases into concrete date ranges.
+    Recursively resolves time_scope into concrete date values.
     """
+    if not state.intent:
+        return state
 
-    intent = state.intent
+    _resolve_intent(state.intent)
+    return state
+
+
+def _resolve_intent(intent):
+    """
+    Recursively resolve time_scope in an IntentState.
+    """
     today = datetime.today()
 
     for f in intent.filters:
 
-        if not f.value:
-            continue
+        # ------------------------
+        # 1️⃣ Resolve current filter
+        # ------------------------
+        if f.time_scope:
 
-        value = str(f.value).lower()
+            scope = f.time_scope.upper()
 
-        # LAST MONTH
-        if value == "last month":
-            first_day_current_month = today.replace(day=1)
-            last_day_last_month = first_day_current_month - timedelta(days=1)
-            first_day_last_month = last_day_last_month.replace(day=1)
+            if scope == "LAST_MONTH":
+                first_day_this_month = today.replace(day=1)
+                last_day_last_month = first_day_this_month - timedelta(days=1)
+                first_day_last_month = last_day_last_month.replace(day=1)
 
-            f.operator = "BETWEEN"
-            f.value = (
-                first_day_last_month.strftime("%Y-%m-%d"),
-                last_day_last_month.strftime("%Y-%m-%d")
-            )
+                f.operator = "BETWEEN"
+                f.value = (
+                    first_day_last_month.strftime("%Y-%m-%d"),
+                    last_day_last_month.strftime("%Y-%m-%d"),
+                )
 
-        # LAST WEEK
-        elif value == "last week":
-            start_of_this_week = today - timedelta(days=today.weekday())
-            end_of_last_week = start_of_this_week - timedelta(days=1)
-            start_of_last_week = end_of_last_week - timedelta(days=6)
+            elif scope == "LAST_WEEK":
+                start_of_this_week = today - timedelta(days=today.weekday())
+                end_of_last_week = start_of_this_week - timedelta(days=1)
+                start_of_last_week = end_of_last_week - timedelta(days=6)
 
-            f.operator = "BETWEEN"
-            f.value = (
-                start_of_last_week.strftime("%Y-%m-%d"),
-                end_of_last_week.strftime("%Y-%m-%d")
-            )
+                f.operator = "BETWEEN"
+                f.value = (
+                    start_of_last_week.strftime("%Y-%m-%d"),
+                    end_of_last_week.strftime("%Y-%m-%d"),
+                )
 
-        # TODAY
-        elif value == "today":
-            f.operator = "="
-            f.value = today.strftime("%Y-%m-%d")
+            elif scope == "TODAY":
+                f.operator = "="
+                f.value = today.strftime("%Y-%m-%d")
 
-        # YESTERDAY
-        elif value == "yesterday":
-            yesterday = today - timedelta(days=1)
-            f.operator = "="
-            f.value = yesterday.strftime("%Y-%m-%d")
-    print(state)
-    return state
+            elif scope == "YESTERDAY":
+                yesterday = today - timedelta(days=1)
+                f.operator = "="
+                f.value = yesterday.strftime("%Y-%m-%d")
 
+            elif scope == "THIS_YEAR":
+                start = today.replace(month=1, day=1)
+                end = today.replace(month=12, day=31)
 
+                f.operator = "BETWEEN"
+                f.value = (
+                    start.strftime("%Y-%m-%d"),
+                    end.strftime("%Y-%m-%d"),
+                )
+
+            elif scope == "LAST_7_DAYS":
+                start = today - timedelta(days=7)
+
+                f.operator = "BETWEEN"
+                f.value = (
+                    start.strftime("%Y-%m-%d"),
+                    today.strftime("%Y-%m-%d"),
+                )
+
+            # Clear time_scope after resolution
+            f.time_scope = None
+
+        # ------------------------
+        # 2️⃣ Recursively resolve subqueries
+        # ------------------------
+        if f.subquery:
+            _resolve_intent(f.subquery)
 
 
 def build_graph(intent_agent, sql_generator, sql_executor):
@@ -99,7 +122,7 @@ def build_graph(intent_agent, sql_generator, sql_executor):
     graph.add_node("intent", lambda s: intent_node(s, intent_agent))
     graph.add_node("sql_generator", lambda s: sql_generator_node(s, sql_generator))
     graph.add_node("sql_executor", lambda s: sql_executor_node(s, sql_executor))
-    graph.add_node("date_resolver", date_resolver_node)
+    graph.add_node("date_resolver", time_scope_resolver_node)
 
     # Define flow
     graph.set_entry_point("intent")

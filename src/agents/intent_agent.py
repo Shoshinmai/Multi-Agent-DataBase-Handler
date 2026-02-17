@@ -28,10 +28,10 @@ class Join(BaseModel):
 class Filter(BaseModel):
     column: str
     operator: str
-    # value: Optional[str] | Optional["IntentState"]  = None
     value: Optional[Any] = None
     aggregation: Optional[str] = None
     subquery: Optional["IntentState"] = None
+    time_scope: Optional[str] = None
 
 
 class Aggregation(BaseModel):
@@ -49,7 +49,6 @@ class IntentState(BaseModel):
     order_by: Optional[List[str]] = []
     aggregations: Optional[List[Aggregation]] = []
     limit: Optional[int] = None
-
 
 INTENT_EXTRACTION_PROMPT = """
 You are an Intent Extraction Agent for converting natural language into a structured JSON representation
@@ -79,6 +78,7 @@ The JSON MUST follow this schema exactly:
       "operator": "string",
 
       "value": "Any | None",
+      "time_scope" : "LAST_MONTH | LAST_WEEK | TODAY | YESTERDAY | THIS_YEAR | LAST_7_DAYS"
 
       "subquery": {
         "intent": "SELECT",
@@ -108,7 +108,7 @@ The JSON MUST follow this schema exactly:
 
   "group_by": ["col1", "col2"],
   "order_by": ["col1 DESC", "col2 ASC"],
-  "limit": 10
+  "limit": 10,
 }
 
 IMPORTANT RULES:
@@ -187,6 +187,31 @@ WHERE vs HAVING RULES:
 
 4. If aggregation is provided, GROUP BY is REQUIRED.
 
+TIME EXPRESSION RULES:
+
+If the user refers to a relative date such as:
+- last month
+- last week
+- yesterday
+- today
+- this year
+- past 7 days
+
+You MUST NOT compute actual dates.
+
+Instead:
+- Set operator to appropriate comparison (e.g., BETWEEN)
+- Set value to null
+- Set "time_scope" to one of:
+    LAST_MONTH
+    LAST_WEEK
+    TODAY
+    YESTERDAY
+    THIS_YEAR
+    LAST_7_DAYS
+
+Do NOT generate literal dates.
+Do NOT generate strings like "last month" in value.
 
 Return ONLY JSON. No markdown. No explanations.
 """
@@ -227,11 +252,7 @@ class IntentAgent:
 
             # Force JSON extraction
             parsed_json = self._extract_json(raw_output)
-            # ps = IntentState(**parsed_json).split()
-            # parsed_json = "]".join(IntentState(**parsed_json))
-            # Validate using Pydantic model
-            print(parsed_json)
-            # print(IntentState(**parsed_json))
+            print(IntentState(**parsed_json))
             return IntentState(**parsed_json)
 
         except ValidationError as e:
@@ -245,10 +266,8 @@ class IntentAgent:
         Extract JSON from the model output safely.
         """
         try:
-            # print(f"Json ----->  {json.loads(text)}")
             return json.loads(text)
         except json.JSONDecodeError:
-            # Attempt to find JSON substring
             start = text.find("{")
             end = text.rfind("}") + 1
             if start != -1 and end != -1:
