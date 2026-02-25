@@ -54,21 +54,6 @@ The system **understands** your intent, **builds** the SQL, **runs** it, and **r
 
 ---
 
-## 📊 Database Schema
-
-```
-┌─────────────────────────────┐         ┌─────────────────────────────┐
-│           User              │         │         Purchase             │
-├─────────────────────────────┤         ├─────────────────────────────┤
-│ id (PK)                     │◄────────│ user_id (FK)                │
-│ name                        │         │ id (PK)                     │
-│ email                       │         │ amount                      │
-│ created_at                  │         │ purchase_date               │
-└─────────────────────────────┘         └─────────────────────────────┘
-```
-
----
-
 ## 🚀 Quick Start
 
 ### Prerequisites
