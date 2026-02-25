@@ -1,5 +1,8 @@
 .env
 agent-env
 __pycache__
+*.pyc
+*.pyo
 src/agents/__pycache__
-src/agents/__pycache__/intent_agent.cpython-312.pyc
+logs/
+*.log

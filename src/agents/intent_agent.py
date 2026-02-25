@@ -1,24 +1,26 @@
-import os
+"""
+Intent Extraction Agent - converts natural language to structured IntentState.
+Uses Google Gemini LLM to parse user queries into tables, columns, joins, filters, etc.
+"""
 import json
+from typing import Any, Dict, List, Optional
+
 from langchain_google_genai import ChatGoogleGenerativeAI
-from pydantic import BaseModel
-from typing import Dict, Any
-from dotenv import load_dotenv
+from pydantic import BaseModel, ValidationError
 
-from pydantic import ValidationError
-from typing import List, Optional
-
-load_dotenv()
-gemini_key = os.getenv("gemini_api_key")
-# gemini_key = "AIzaSyCbKbhdIgYLC_ECAdoXK6SB7htSh6P83VU"
-# print(os.getenv("gemini_api_key"))
+from config import GEMINI_API_KEY
+from src.logger import agent_logger
 
 llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash", google_api_key=gemini_key, temperature=0
+    model="gemini-2.5-flash",
+    google_api_key=GEMINI_API_KEY,
+    temperature=0,
 )
 
 
 class Join(BaseModel):
+    """Join definition between two tables."""
+
     table1: str
     table2: str
     column1: str
@@ -26,6 +28,8 @@ class Join(BaseModel):
 
 
 class Filter(BaseModel):
+    """Filter condition with optional aggregation and subquery support."""
+
     column: str
     operator: str
     value: Optional[Any] = None
@@ -35,20 +39,28 @@ class Filter(BaseModel):
 
 
 class Aggregation(BaseModel):
+    """Aggregation (SUM, AVG, COUNT, etc.) on a column."""
+
     column: str
     function: str
 
 
 class IntentState(BaseModel):
-    intent: str  # e.g. "SELECT"
-    tables: List[str]  # ["Sales", "Customers"]
-    columns: List[str]  # ["sale_amount", "customer_name"]
+    """
+    Structured representation of user intent for SQL generation.
+    Produced by the Intent Agent from natural language input.
+    """
+
+    intent: str
+    tables: List[str]
+    columns: List[str]
     joins: Optional[List[Join]] = []
     filters: Optional[List[Filter]] = []
     group_by: Optional[List[str]] = []
     order_by: Optional[List[str]] = []
     aggregations: Optional[List[Aggregation]] = []
     limit: Optional[int] = None
+
 
 INTENT_EXTRACTION_PROMPT = """
 You are an Intent Extraction Agent for converting natural language into a structured JSON representation
@@ -220,22 +232,15 @@ Return ONLY JSON. No markdown. No explanations.
 class IntentAgent:
     """
     LLM-based Intent Extraction Agent.
-    Converts natural language input→structured IntentState.
+    Converts natural language input into structured IntentState for SQL generation.
     """
 
     def __init__(self, model, schema_context: str):
-        """
-        model = Gemini Model
-        Example:
-            model = ChatGoogleGenerativeAI(model = "gemini-2.5-flash-lite")
-        """
         self.model = model
         self.schema_context = schema_context
 
     def run(self, query: str) -> IntentState:
-        """
-        Run the LLM and return a parsed IntentState object.
-        """
+        """Invoke LLM and parse response into IntentState."""
         try:
             completion = self.model.invoke(
                 [
@@ -243,49 +248,28 @@ class IntentAgent:
                         "system",
                         f"{INTENT_EXTRACTION_PROMPT}\n\n{self.schema_context}",
                     ),
-                    ("human", f"{query}"),
+                    ("human", query),
                 ]
             )
-
             raw_output = completion.content
-            # print(raw_output)
-
-            # Force JSON extraction
             parsed_json = self._extract_json(raw_output)
-            print(IntentState(**parsed_json))
-            return IntentState(**parsed_json)
-
+            intent_state = IntentState(**parsed_json)
+            agent_logger.info("Intent extracted for query: %s", query[:50])
+            return intent_state
         except ValidationError as e:
-            raise ValueError(f"IntentState validation failed: {e}")
-
+            agent_logger.error("IntentState validation failed: %s", e)
+            raise ValueError(f"IntentState validation failed: {e}") from e
         except Exception as e:
-            raise RuntimeError(f"IntentAgent error: {e}")
+            agent_logger.exception("IntentAgent error")
+            raise RuntimeError(f"IntentAgent error: {e}") from e
 
     def _extract_json(self, text: str) -> Dict[str, Any]:
-        """
-        Extract JSON from the model output safely.
-        """
+        """Extract JSON from LLM output, handling markdown-wrapped responses."""
         try:
             return json.loads(text)
         except json.JSONDecodeError:
             start = text.find("{")
             end = text.rfind("}") + 1
             if start != -1 and end != -1:
-                json_str = text[start:end]
-                return json.loads(json_str)
-
-            raise ValueError("Failed to parse JSON from LLM output.")
-
-
-# agent = IntentAgent(llm)
-# result = agent.run("users whose purchase is greater than the average of last month.")
-# result = agent.run("Show all users who made more than the average purchase amount.")
-
-# print(result.model_dump_json(indent=2))
-# print(result)
-
-# graph/nodes/intent_node.py
-
-# def intent_node(state: GraphState, intent_agent):
-#     intent = intent_agent.run(state.user_query)
-#     return state.model_copy(update={"intent": intent})
+                return json.loads(text[start:end])
+            raise ValueError("Failed to parse JSON from LLM output.") from None
